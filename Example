@@ -1,0 +1,8 @@
+# basic settings
+n = 1000 # sample size
+rho = 16 # expected number of visits
+setting = 1 # which setting
+penalty <- "lasso" # which penalty
+if(penalty == "glasso"| penalty == "aglasso"){
+  devtools::load_all("grplasso")
+}
