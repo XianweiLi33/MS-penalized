@@ -1,1 +1,549 @@
+# matrix exponential
+# to compute the transition probability matrix within an time-homogeneous interval
+q_h <- function(qmat, start, end) {
+  l1 = -qmat[1, 1]
+  l2 = -qmat[2, 2]
+  if (start  ==  end) {
+    p = diag(3)
+  } else if (end == Inf) {
+    # would enter state 2 when t = Inf
+    p = cbind(rep(0, 3), rep(0, 3), rep(1, 3))
+  } else{
+    if (l1 == l2) {
+      p01 = l1 * exp(-l1 * (end - start)) * (end - start)
+    } else{
+      p01 = (l1 / (l2 - l1)) * (exp(-(end - start) * l1) - exp(-(end - start) *
+                                                                 l2))
+    }
+    p00 = exp(-l1 * (end - start))
+    p11 = exp(-l2 * (end - start))
+    p02 = 1 - p01 - p00
+    p12 = 1 - p11
+    p = matrix(c(p00, p01, p02,
+                 0, p11, p12,
+                 0, 0, 1), 3, 3, byrow = T)
+  }
+  return(p)
+}
+
+# to compute the transition probability matrix for an arbitrary interval 
+p_fn <- function(start, end, theta, x) {
+  # if start = end, assign 1 to the transition probability
+  if(start == end){
+    p = diag(3)
+  }else{
+    # baselines
+    l1_base = theta[1:npiece] # number of pieces = 3
+    l2_base = theta[(1+ npiece):(2*npiece)]
+    # regression coefficients
+    beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+    beta2 = theta[(2 * npiece  + p + 1):(2 * npiece  + p + p)]
+
+    # baselines * x effects
+    l1 = l1_base*as.vector(exp(x%*%beta1))
+    l2 = l2_base*as.vector(exp(x%*%beta2))
+    # transition rate matrix
+    q1 <- rbind(c(-l1[1], l1[1], 0),
+                c(0,-l2[1], l2[1]),
+                c(0, 0, 0))
+    # transition rate matrix
+    q2 <- rbind(c(-l1[2], l1[2], 0),
+                c(0,-l2[2], l2[2]),
+                c(0, 0, 0))
+    # transition rate matrix
+    q3 <- q4 <- rbind(c(-l1[3], l1[3], 0),
+                      c(0,-l2[3], l2[3]),
+                      c(0, 0, 0))
+    q = list(q1, q2, q3, q4)
+    # general transition probability
+    h.lower = min(which(cut_points > start)) - 1
+    h.upper = ifelse(end == Inf, max(which(cut_points < end)) - 1, max(which(cut_points <= end)) - 1)
+    # if h.lower > h.upper -> same interval h.lower
+    if(h.lower > h.upper){
+      p = q_h(qmat = q[[h.lower]], start = start, end = end)
+    }else if (h.lower == h.upper){
+      p = q_h(qmat = q[[h.lower]], start = start, end = cut_points[h.lower + 1])%*%q_h(qmat = q[[h.upper + 1]], start = cut_points[h.upper + 1], end = end)
+    }else{
+      p = q_h(qmat = q[[h.lower]], start = start, end = cut_points[h.lower + 1])%*%q_h(qmat = q[[h.lower + 1]], start = cut_points[h.lower + 1], end = cut_points[h.upper + 1]) %*% q_h(qmat = q[[h.upper + 1]], start = cut_points[h.upper + 1], end = end)
+    }
+  }
+  return(p)
+}
+
+# delta for transition 1, piece1
+d11_fn = function(L1, L2, R1, R2, theta, x) {
+  c1 = max(b0, L1)
+  c2 = min(b1, R1)
+  if (c1 >= c2) {
+    d = 0
+  } else{
+    if (L1 == L2 & R1 == R2) { # path 2
+      d = (
+        p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 2] * p_fn(c2, R1, theta, x)[2, 3] +
+          p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 3] * p_fn(c2, R1, theta, x)[3, 3]
+      ) / p_fn(L1, R1, theta, x)[1, 3]
+    } else{ # path 1
+      d = p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 2] * p_fn(c2, R1, theta, x)[2, 2] /
+        p_fn(L1, R1, theta, x)[1, 2]
+    }
+  }
+  return(d)
+}
+
+
+d12_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(b1, L1)
+  c2 = min(b2, R1)
+  # path 1
+  if (c1 >= c2) {
+    d = 0
+  } else{
+    if (L1 == L2 & R1 == R2) { # path 2
+      d = (
+        p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 2] * p_fn(c2, R1, theta, x)[2, 3] +
+          p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 3] * p_fn(c2, R1, theta, x)[3, 3]
+      ) / p_fn(L1, R1, theta, x)[1, 3]
+    } else{ # path 1
+      d = p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 2] * p_fn(c2, R1, theta, x)[2, 2] /
+        p_fn(L1, R1, theta, x)[1, 2]
+    }
+  }
+  return(d)
+}
+
+d13_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(b2, L1)
+  c2 = min(b3, R1)
+  # path 1
+  if (c1 >= c2) {
+    d = 0
+  } else{
+    # path 2
+    if (L1 == L2 & R1 == R2) {
+      d = (
+        p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 2] * p_fn(c2, R1, theta, x)[2, 3] +
+          p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 3] * p_fn(c2, R1, theta, x)[3, 3]
+      ) / p_fn(L1, R1, theta, x)[1, 3]
+    } else{
+      d = p_fn(L1, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 2] * p_fn(c2, R1, theta, x)[2, 2] /
+        p_fn(L1, R1, theta, x)[1, 2]
+    }
+  }
+  return(d)
+}
+
+
+# transition 2
+d21_fn = function(L1, L2, R1, R2, theta, x) {
+  c1 = max(b0, L2)
+  c2 = min(b1, R2)
+  if (c1 >= c2) {
+    d = 0
+  } else{
+    if (L1 == L2 & R1 == R2) {
+      d = (
+        p_fn(L2, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 3] * p_fn(c2, R2, theta, x)[3, 3] + p_fn(L2, c1, theta, x)[1, 2] * p_fn(c1, c2, theta, x)[2, 3] * p_fn(c2, R2, theta, x)[3, 3]
+      ) / p_fn(L2, R2, theta, x)[1, 3]
+    } else{
+      d = p_fn(L2, c1, theta, x)[2, 2] * p_fn(c1, c2, theta, x)[2, 3] * p_fn(c2, R2, theta, x)[3, 3] /
+        p_fn(L2, R2, theta, x)[2, 3]
+    }
+  }
+  return(d)
+}
+
+d22_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(b1, L2)
+  c2 = min(b2, R2)
+  # path 1
+  if (c1 >= c2) {
+    d = 0
+  } else{
+    if (L1 == L2 & R1 == R2) {
+      d = (
+        p_fn(L2, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 3] * p_fn(c2, R2, theta, x)[3, 3] + p_fn(L2, c1, theta, x)[1, 2] * p_fn(c1, c2, theta, x)[2, 3] * p_fn(c2, R2, theta, x)[3, 3] ) / p_fn(L2, R2, theta, x)[1, 3]
+    } else{
+      d = p_fn(L2, c1, theta, x)[2, 2] * p_fn(c1, c2, theta, x)[2, 3] * p_fn(c2, R2, theta, x)[3, 3] /
+        p_fn(L2, R2, theta, x)[2, 3]
+    }
+  }
+  return(d)
+}
+
+d23_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(b2, L2)
+  c2 = min(b3, R2)
+  # path 1
+  if (c1 >= c2) {
+    d = 0
+  } else{
+    if (L1 == L2 & R1 == R2) {
+      d = (
+        p_fn(L2, c1, theta, x)[1, 1] * p_fn(c1, c2, theta, x)[1, 3] * p_fn(c2, R2, theta, x)[3, 3] + p_fn(L2, c1, theta, x)[1, 2] * p_fn(c1, c2, theta, x)[2, 3] * p_fn(c2, R2, theta, x)[3, 3]
+      ) / p_fn(L2, R2, theta, x)[1, 3]
+    } else{
+      d = p_fn(L2, c1, theta, x)[2, 2] * p_fn(c1, c2, theta, x)[2, 3] * p_fn(c2, R2, theta, x)[3, 3] /
+        p_fn(L2, R2, theta, x)[2, 3]
+    }
+  }
+  return(d)
+}
+
+
+
+# test function
+d11.fn.s <- function(i, theta, datac){
+  df <- datac[i, ]
+  val = with(df, d11_fn(L1, L2, R1, R2, theta = theta, x = as.numeric(df[c(paste0("x", 1:100))])))
+  return(val)
+}
+
+d12.fn.s <- function(i, theta, datac){
+  df <- datac[i, ]
+  val = with(df, d12_fn(L1, L2, R1, R2, theta = theta,  x = as.numeric(df[c(paste0("x", 1:100))])))
+  return(val)
+}
+
+d13.fn.s <- function(i, theta, datac){
+  df <- datac[i, ]
+  val = with(df, d13_fn(L1, L2, R1, R2, theta = theta,  x = as.numeric(df[c(paste0("x", 1:100))])))
+  return(val)
+}
+
+d21.fn.s <- function(i, theta, datac){
+  df <- datac[i, ]
+  val = with(df, d21_fn(L1, L2, R1, R2, theta = theta,  x = as.numeric(df[c(paste0("x", 1:100))])))
+  return(val)
+}
+
+d22.fn.s <- function(i, theta, datac){
+  df <- datac[i, ]
+  val = with(df, d22_fn(L1, L2, R1, R2, theta = theta,  x = as.numeric(df[c(paste0("x", 1:100))])))
+  return(val)
+}
+
+d23.fn.s <- function(i, theta, datac){
+  df <- datac[i, ]
+  val = with(df, d23_fn(L1, L2, R1, R2, theta = theta, x = as.numeric(df[c(paste0("x", 1:100))])))
+  return(val)
+}
+
+
+f001 <- function(c1, c2, theta, x, h){
+  if (c2 == Inf){
+    return(0)
+  }else{
+    # baselines
+    l1_base = theta[1:npiece] # number of pieces = 3
+    l2_base = theta[npiece + c(1:npiece)]
+    # regression coefficients
+    beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+    beta2 = theta[ p + ((2 * npiece + 1):(2 * npiece + p))]
+    # baselines * x effects
+    l1 = (l1_base*as.vector(exp(x%*%beta1)))[h]
+    l2 = (l2_base*as.vector(exp(x%*%beta2)))[h]
+    if(l1 == l2){
+      p1 = (c2-(c2+c1)/2)*(c2 - c1)*l1*exp(l1*(c1-c2))
+      return(p1)
+    }else{
+      p1 = l1/(l2-l1)*exp(l1*(c1-c2))*(c2 - c1)
+      p2 = -l1/(l2-l1)*(exp(l1*(c1-c2))-exp(l2*(c1-c2)))/(l2-l1)
+      return(p1 + p2)
+    }
+  }
+}
+
+
+f002 = function(c1, c2, theta, x, h){
+  # baselines
+  # baselines
+  l1_base = theta[1:npiece] # number of pieces = 3
+  l2_base = theta[npiece + c(1:npiece)]
+  # regression coefficients
+  beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+  beta2 = theta[ p + ((2 * npiece + 1):(2 * npiece + p))]
+  # baselines * x effects
+  l1 = (l1_base*as.vector(exp(x%*%beta1)))[h]
+  l2 = (l2_base*as.vector(exp(x%*%beta2)))[h]
+  if(c2 == Inf){
+    1/l1
+  }else if(l1 == l2){
+    p1 = ((c2-c1)^2/2)*l1*exp(l1*(c1-c2))
+    p3 = (exp(l1*(c1-c2))-1)/(-l1)
+    p4 = (c2-c1)*exp(-l1*(c2-c1))
+    return(p3 - p4 - p1)
+  }else{
+    p1 = l1/(l2-l1)*exp(l1*(c1-c2))*(c2 - c1)
+    p2 = -l1/(l2-l1)*(exp(l1*(c1-c2))-exp(l1*(c1-c1)+l2*(c1-c2)))/(l2-l1)
+    p3 = (exp(l1*(c1-c2))-1)/(-l1)
+    p4 = (c2-c1)*exp(-l1*(c2-c1))
+    return(p3 - p4 - p1 - p2)
+  }
+}
+
+
+f011= function(c1, c2, theta, x, h){
+  # baselines
+  # baselines
+  l1_base = theta[1:npiece] # number of pieces = 3
+  l2_base = theta[npiece + c(1:npiece)]
+  # regression coefficients
+  beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+  beta2 = theta[ p + ((2 * npiece + 1):(2 * npiece + p))]
+  # baselines * x effects
+  l1 = (l1_base*as.vector(exp(x%*%beta1)))[h]
+  l2 = (l2_base*as.vector(exp(x%*%beta2)))[h]
+  if(c2 == Inf){
+    return(0)
+  }else if(l1 ==l2){
+    p1 = ((c1+c2)/2 - c1)*(c2 - c1)*l1*exp(l1*(c1-c2))
+    return(p1)
+  }else{
+    p1 = l1/(l2-l1)*(exp(l1*(c1-c2))-exp(l2*(c1-c2)))/(l2-l1)
+    p2 = -l1/(l2-l1)*exp(l2*(c1-c2))*(c2-c1)
+    return(p1 + p2)
+  }
+}
+
+
+f012= function(c1, c2, theta, x, h){
+  # baselines
+  # baselines
+  l1_base = theta[1:npiece] # number of pieces = 3
+  l2_base = theta[npiece + c(1:npiece)]
+  # regression coefficients
+  beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+  beta2 = theta[ p + ((2 * npiece + 1):(2 * npiece + p))]
+  # baselines * x effects
+  l1 = (l1_base*as.vector(exp(x%*%beta1)))[h]
+  l2 = (l2_base*as.vector(exp(x%*%beta2)))[h]
+  if(c2 == Inf){
+    1/l2
+  }else if(l1 == l2){
+    p1 = ((c2+c1)/2 - c1)*(c2 - c1)*l1*exp(l1*(c1-c2))
+    p3 = c1/(-l1)*(exp((-l1)*c2) - exp((-l1)*c1))
+    p4 = (1 / (-l1)) * ((c2 - 1 / (-l1)) * exp((-l1) * c2) - (c1 - 1 / (-l1)) * exp((-l1) * c1))
+    l1*exp(l1*c1)*(-p3+p4) - p1
+  }else{
+    p1 = -(exp(l1*(c1-c2))-1)/(l1)
+    p2 = -(exp(l1*(c1-c2))-exp( l2*(c1 - c2)))/(l2-l1)
+    p3 = (exp(l2*(c1-c2))-1)/(l2)
+    p4 = exp(l2*(c1-c2))*(c2-c1)
+    l1/(l2-l1)*(p1 + p2 + p3 + p4)
+  }
+}
+
+
+f112= function(c1, c2, theta, x, h){
+  # baselines
+  # baselines
+  l1_base = theta[1:npiece] # number of pieces = 3
+  l2_base = theta[npiece + c(1:npiece)]
+  # regression coefficients
+  beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+  beta2 = theta[ p + ((2 * npiece + 1):(2 * npiece + p))]
+  # baselines * x effects
+  l1 = (l1_base*as.vector(exp(x%*%beta1)))[h]
+  l2 = (l2_base*as.vector(exp(x%*%beta2)))[h]
+  if(c2 == Inf){
+    1/l2
+  }else{p1 = (exp(l2*(c1 - c2))-1)/(-l2)
+  p2 = -exp(l2*(c1-c2))*(c2-c1)
+  return(p1 + p2)
+  }
+}
+
+
+s11_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(L1, b0)
+  c2 = min(R1, b1)
+  s1.p1 = max(0, min(L1, b1) - max(0, b0))
+  if (c1 >= c2) { # no intersection
+    s1.p2 = 0
+  } else{ # there is intersection
+    # s1.p2
+    if(L1 == L2 & R1 == R2){ # path 2
+      s1.p2 = p_fn(L1, c2, theta, x)[1,1]*p_fn(c2, R1, theta, x)[1, 3]/p_fn(L1, R1, theta, x)[1, 3]*(c2-c1)+
+        p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 1)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[2,3]+
+        p_fn(L1, c1, theta, x)[1,1]*f002(c1, c2, theta, x, h = 1)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[3,3]
+    }else{ # path 1
+      s1.p2 = p_fn(L1, c2, theta, x)[1,1]*p_fn(c2, R1, theta, x)[1, 2]/p_fn(L1, R1, theta, x)[1, 2]*(c2-c1)+
+        p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 1)/p_fn(L1, R1, theta, x)[1, 2]*p_fn(c2, R1, theta, x)[2,2]
+    }
+  }
+  s1 = s1.p1+s1.p2
+  return(s1)
+}
+
+
+s12_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(L1, b1)
+  c2 = min(R1, b2)
+  s1.p1 = max(0, min(L1, b2) - max(0, b1))
+  if (c1 > c2) {
+    s1.p2 = 0
+  } else{ # there is intersection
+    # s1.p2
+    if(L1 == L2 & R1 == R2){ # path 2
+      s1.p2 = p_fn(L1, c2, theta, x)[1,1]*p_fn(c2, R1, theta, x)[1, 3]/p_fn(L1, R1, theta, x)[1, 3]*(c2-c1)+
+        p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 2)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[2,3]+
+        p_fn(L1, c1, theta, x)[1,1]*f002(c1, c2, theta, x, h = 2)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[3,3]
+    }else{ # path 1
+      s1.p2 = p_fn(L1, c2, theta, x)[1,1]*p_fn(c2, R1, theta, x)[1, 2]/p_fn(L1, R1, theta, x)[1, 2]*(c2-c1)+
+        p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 2)/p_fn(L1, R1, theta, x)[1, 2]*p_fn(c2, R1, theta, x)[2,2]
+    }
+  }
+  s1 = s1.p1+s1.p2
+  return(s1)
+}
+
+s13_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(L1, b2)
+  c2 = min(R1, b3)
+  s1.p1 = max(0, min(L1, b3) - max(0, b2))
+  if (c1 > c2) {
+    s1.p2 = 0
+  } else if (c2 == Inf){
+    s1.p2 = p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 3)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[2,3]+
+      p_fn(L1, c1, theta, x)[1,1]*f002(c1, c2, theta, x, h = 3)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[3,3]
+  }else{
+    # s1.p2
+    if(L1 == L2 & R1 == R2){ # path 2
+      s1.p2 = p_fn(L1, c2, theta, x)[1,1]*p_fn(c2, R1, theta, x)[1, 3]/p_fn(L1, R1, theta, x)[1, 3]*(c2-c1)+
+        p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 3)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[2,3]+
+        p_fn(L1, c1, theta, x)[1,1]*f002(c1, c2, theta, x, h = 3)/p_fn(L1, R1, theta, x)[1, 3]*p_fn(c2, R1, theta, x)[3,3]
+    }else{ # path 1
+      s1.p2 = p_fn(L1, c2, theta, x)[1,1]*p_fn(c2, R1, theta, x)[1, 2]/p_fn(L1, R1, theta, x)[1, 2]*(c2-c1)+
+        p_fn(L1, c1, theta, x)[1,1]*f001(c1, c2, theta, x, h = 3)/p_fn(L1, R1, theta, x)[1, 2]*p_fn(c2, R1, theta, x)[2,2]
+    }
+  }
+  s1 = s1.p1 + s1.p2
+  return(s1)
+}
+
+# s2
+s21_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(L1, b0)
+  c2 = min(R1, b1)
+  c1p = max(L2, b0)
+  c2p = min(R2, b1)
+  # s1.p2
+  s2.p2 = max(0, min(L2, b1) - max(R1, b0))
+  if(L1 == L2 & R1 == R2){ # path 2
+    s2 = ifelse(c1 > c2, 0, p_fn(L2, c1, theta, x)[1, 1]*(f011(c1, c2, theta, x, h = 1)*p_fn(c2, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[1, 3] + f012(c1, c2, theta, x, h = 1)*p_fn(c2, R2, theta, x)[3, 3]/p_fn(L2, R2, theta, x)[1, 3]) +
+                  p_fn(L2, c1, theta, x)[1, 2]*p_fn(c1, c2, theta, x)[2, 2]*p_fn(c2, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[1, 3]*(c2-c1) +
+                  p_fn(L2, c1, theta, x)[1, 2]*f112(c1, c2, theta, x, h = 1)*p_fn(c2, R2, theta, x)[3, 3]/p_fn(L2, R2, theta, x)[1, 3])
+  }else{ # path 1
+    s2.p1 = ifelse(c1 > c2, 0, p_fn(L1, c1, theta, x)[1,1]*f011(c1, c2, theta, x, h = 1)/p_fn(L1, R1, theta, x)[1, 2]*p_fn(c2, R1, theta,x)[2, 2] + p_fn(L1, c1, theta, x)[1, 2]*p_fn(c1, R1, theta, x)[2, 2]/p_fn(L1, R1, theta, x)[1, 2]*(c2-c1))
+
+    s2.p3 = ifelse(c1p > c2p, 0, p_fn(L2, c2p, theta, x)[2, 2]*p_fn(c2p, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[2, 3]*(c2p-c1p) +
+                     p_fn(L2, c1p, theta, x)[2,2]*f112(c1p, c2p, theta, x, h = 1)/p_fn(L2, R2, theta, x)[2, 3]*p_fn(c2p, R2, theta,x)[3, 3])
+    s2 = s2.p1 + s2.p2 + s2.p3
+  }
+  return(s2)
+}
+
+# s2
+s22_fn = function(L1, L2, R1, R2, theta, x){
+  c1 = max(L1, b1)
+  c2 = min(R1, b2)
+  c1p = max(L2, b1)
+  c2p = min(R2, b2)
+  # s1.p2
+  s2.p2 = max(0, min(L2, b2) - max(R1, b1))
+  if(L1 == L2 & R1 == R2){ # path 2
+    s2 = ifelse(c1 > c2, 0, p_fn(L2, c1, theta, x)[1, 1]*(f011(c1, c2, theta, x, h = 2)*p_fn(c2, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[1, 3] + f012(c1, c2, theta, x, h = 2)*p_fn(c2, R2, theta, x)[3, 3]/p_fn(L2, R2, theta, x)[1, 3]) +
+                  p_fn(L2, c1, theta, x)[1, 2]*p_fn(c1, c2, theta, x)[2, 2]*p_fn(c2, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[1, 3]*(c2-c1) +
+                  p_fn(L2, c1, theta, x)[1, 2]*f112(c1, c2, theta, x, h = 2)*p_fn(c2, R2, theta, x)[3, 3]/p_fn(L2, R2, theta, x)[1, 3])
+  }else{ # path 1
+    s2.p1 = ifelse(c1 > c2, 0, p_fn(L1, c1, theta, x)[1,1]*f011(c1, c2, theta, x, h = 2)/p_fn(L1, R1, theta, x)[1, 2]*p_fn(c2, R1, theta,x)[2, 2] + p_fn(L1, c1, theta, x)[1, 2]*p_fn(c1, R1, theta, x)[2, 2]/p_fn(L1, R1, theta, x)[1, 2]*(c2-c1))
+
+    s2.p3 = ifelse(c1p > c2p, 0, p_fn(L2, c2p, theta, x)[2, 2]*p_fn(c2p, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[2, 3]*(c2p-c1p)+
+                     p_fn(L2, c1p, theta, x)[2,2]*f112(c1p, c2p, theta, x, h = 2)/p_fn(L2, R2, theta, x)[2, 3]*p_fn(c2p, R2, theta,x)[3, 3])
+    s2 = s2.p1 + s2.p2 + s2.p3
+  }
+  return(s2)
+}
+
+
+# s2
+s23_fn = function(L1, L2, R1, R2, theta, x) {
+  c1 = max(L1, b2)
+  c2 = min(R1, b3)
+  c1p = max(L2, b2)
+  c2p = min(R2, b3)
+  # s1.p2
+  s2.p2 = max(0, min(L2, b3) - max(R1, b2))
+  if (L1 == L2 & R1 == R2) {
+    # path 2
+    if (c1 > c2) {
+      s2 = 0
+    } else if (c2 == Inf) {
+      s2 =  p_fn(L2, c1, theta, x)[1, 1] * (
+        f011(c1, c2, theta, x, h = 3) * p_fn(c2, R2, theta, x)[2, 3] / p_fn(L2, R2, theta, x)[1, 3] + f012(c1, c2, theta, x, h = 3) *
+          p_fn(c2, R2, theta, x)[3, 3] / p_fn(L2, R2, theta, x)[1, 3]
+      ) +
+        p_fn(L2, c1, theta, x)[1, 2] * f112(c1, c2, theta, x, h = 3) * p_fn(c2, R2, theta, x)[3, 3] /
+        p_fn(L2, R2, theta, x)[1, 3]
+    } else{
+      s2 = p_fn(L2, c1, theta, x)[1, 1]*(f011(c1, c2, theta, x, h = 2)*p_fn(c2, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[1, 3] + f012(c1, c2, theta, x, h = 2)*p_fn(c2, R2, theta, x)[3, 3]/p_fn(L2, R2, theta, x)[1, 3]) +
+        p_fn(L2, c1, theta, x)[1, 2]*p_fn(c1, c2, theta, x)[2, 2]*p_fn(c2, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[1, 3]*(c2-c1) +
+        p_fn(L2, c1, theta, x)[1, 2]*f112(c1, c2, theta, x, h = 2)*p_fn(c2, R2, theta, x)[3, 3]/p_fn(L2, R2, theta, x)[1, 3]
+    }
+  } else{
+    # path 1
+    if (c1 > c2) {
+      s2.p1 = 0
+    } else if (c2 == Inf) {
+      s2.p1 = p_fn(L1, c1, theta, x)[1, 1] * f011(c1, c2, theta, x, h = 3) / p_fn(L1, R1, theta, x)[1, 2] *
+        p_fn(c2, R1, theta, x)[2, 2]
+    } else{
+      s2.p1 = p_fn(L1, c1, theta, x)[1,1]*f011(c1, c2, theta, x, h = 2)/p_fn(L1, R1, theta, x)[1, 2]*p_fn(c2, R1, theta,x)[2, 2] + p_fn(L1, c1, theta, x)[1, 2]*p_fn(c1, R1, theta, x)[2, 2]/p_fn(L1, R1, theta, x)[1, 2]*(c2-c1)
+    }
+    if (c1p > c2p) {
+      s2.p3 = 0
+    } else if (c2p == Inf) {
+      s2.p3 = p_fn(L2, c1p, theta, x)[2, 2] * f112(c1, c2, theta, x, h = 3) /
+        p_fn(L2, R2, theta, x)[2, 3] * p_fn(c2p, R2, theta, x)[3, 3]
+    } else{
+      s2.p3 = p_fn(L2, c2p, theta, x)[2, 2]*p_fn(c2p, R2, theta, x)[2, 3]/p_fn(L2, R2, theta, x)[2, 3]*(c2p-c1p)+
+        p_fn(L2, c1p, theta, x)[2,2]*f112(c1p, c2p, theta, x, h = 3)/p_fn(L2, R2, theta, x)[2, 3]*p_fn(c2p, R2, theta,x)[3, 3]
+    }
+    s2 = s2.p1 + s2.p2 + s2.p3
+  }
+  return(s2)
+}
+
+
+s11.fn.s <- function(i, theta, datac){
+  temp <- datac[i, ]
+  val = with(temp, s11_fn(L1, L2, R1, R2, theta = theta, as.numeric(temp[c(paste0("x", 1:100))])))
+  return(val)
+}
+s12.fn.s <- function(i, theta, datac){
+  temp <- datac[i, ]
+  val = with(temp,s12_fn(L1, L2, R1, R2, theta = theta, as.numeric(temp[c(paste0("x", 1:100))])))
+  return(val)
+}
+s13.fn.s <- function(i, theta, datac){
+  temp <- datac[i, ]
+  val = with(temp,s13_fn(L1, L2, R1, R2, theta = theta, as.numeric(temp[c(paste0("x", 1:100))])))
+  return(val)
+}
+s21.fn.s <- function(i, theta, datac){
+  temp <- datac[i, ]
+  val = with(temp,s21_fn(L1, L2, R1, R2, theta = theta, as.numeric(temp[c(paste0("x", 1:100))])))
+  return(val)
+}
+s22.fn.s <- function(i, theta, datac){
+  temp <- datac[i, ]
+  val = with(temp,s22_fn(L1, L2, R1, R2, theta = theta, as.numeric(temp[c(paste0("x", 1:100))])))
+  return(val)
+}
+s23.fn.s <- function(i, theta, datac){
+  temp <- datac[i, ]
+  val = with(temp,s23_fn(L1, L2, R1, R2, theta = theta,as.numeric(temp[c(paste0("x", 1:100))])))
+  return(val)
+}
+
 
