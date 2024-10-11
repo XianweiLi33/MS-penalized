@@ -1,6 +1,4 @@
-
-
-
+# Generate data under continuous observation
 data_comp_gen <- function(seed, theta, xtype, n) {
   set.seed(seed)
   beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
@@ -26,6 +24,7 @@ data_comp_gen <- function(seed, theta, xtype, n) {
   return(data.comp)
 }
 
+# Generate observed data under intermittent observation given the complete data
 data_ic_gen <- function(seed, datat, rho){
   set.seed(seed)
   datac.list <- NULL
@@ -73,6 +72,7 @@ data_ic_gen <- function(seed, datat, rho){
   return(datac)
 }
 
+# generate observed data under dependent observation scheme
 data_dependenet_visit_gen <- function(seed, theta, xtype, n) {
   set.seed(seed)
   datac.list <- data.msm.list <- NULL
