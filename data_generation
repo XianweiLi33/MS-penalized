@@ -1,0 +1,71 @@
+data_comp_gen <- function(seed, theta, xtype, n) {
+  set.seed(seed)
+  beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
+  beta2 = theta[(2 * npiece  + p + 1):(2 * npiece  + p + p)]
+  l1 = theta[1]# the first baseline
+  l2 = theta[1+npiece ]# the second baseline # please carefully check the baseline when there are more cutpoints
+  # generate x
+  x <- switch(as.character(xtype), "cts" = rmvnorm(n, mean = mean.x, sigma = sigma.x), "binary" = cBern(n, rep(0.2,p), 0.2, type="DCP"))
+  # generate t1
+  t1 <- rexp(n = n, rate = l1 * exp(x %*% beta1))
+  # generate W
+  w <- rexp(n = n, rate = l2 * exp(x %*% beta2))
+  # T2 = T1+w
+  t2 <- t1 + w
+  # data frame
+  temp = data.frame(id = 1:n,
+                    t1 = t1,
+                    t2 = t2,
+                    w = w)
+  # change names
+  colnames(x) <- paste0("x", 1:p)
+  data.comp <- cbind(temp, x)
+  return(data.comp)
+}
+
+data_ic_gen <- function(seed, datat, rho){
+  set.seed(seed)
+  datac.list <- NULL
+  for (i in 1:nrow(datat)){
+    temp = datat[i,]
+    times  = c(temp$t1, temp$t2)
+    states = 1:2
+    # generate A (actual # of visits)
+    A <- rpois(1, rho*tau)
+    if(A == 0) next
+    Ai <- runif(A) * tau
+    Ai <- c(0,Ai[order(Ai)])
+    # record observed state
+    fun <- stepfun(x = times, y = c(0,states))
+    z <- fun(Ai)
+    if(sum(z==1) != 0 & sum(z==2)!=0){
+      L1 <- Ai[max(which(z == 0))]
+      R1 <- Ai[min(which(z == 1))]
+      L2 <- Ai[max(which(z == 1))]
+      R2 <- Ai[min(which(z == 2))]
+      # 0-2
+    }else if(sum(z==1) == 0 & sum(z==2)!=0){
+      L1 <- L2 <- Ai[max(which(z == 0))]
+      R1 <- R2 <- Ai[min(which(z == 2))]
+      # 0-1
+    }else if (sum(z==1) !=0 & sum(z==2) == 0){
+      L1 <- Ai[max(which(z == 0))]
+      R1 <- Ai[min(which(z == 1))]
+      L2 <- Ai[max(which(z == 1))]
+      R2 <- CC
+      # 0-0
+    }else{
+      L1 <- max(Ai)
+      R1 <- CC
+      L2 <- max(Ai)
+      R2 <- CC
+    }
+    datac.list[[i]] <- data.frame(id = i, L1, R1, L2, R2)
+  }
+  datac <- do.call(rbind, datac.list)
+  # id with x
+  x.df <- datat[, c("id", paste0("x", 1:100))]
+  # merge -> id + censored interval + x
+  datac <- merge(datac, x.df, by = "id")
+  return(datac)
+}
