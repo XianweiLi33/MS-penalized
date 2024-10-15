@@ -1,8 +1,122 @@
+library(mvtnorm)
+library(glmnet)
+library(devtools)
+library(msm)
+
 # basic settings
 n = 1000 # sample size
 rho = 16 # expected number of visits
 setting = 1 # which setting
 penalty <- "lasso" # which penalty
 if(penalty == "glasso"| penalty == "aglasso"){
-  devtools::load_all("grplasso")
+  devtools::load_all("grplasso") # need to replace the file in the original package to run adaptive group lasso
 }
+if (setting == 1) {
+  beta1 = c(rep(log(1.2), 5), rep(0, 90), rep(log(1.2), 5))
+  beta2 = c(rep(log(1.2), 5), rep(0, 90), rep(log(1.2), 5))
+  l10 <- 8.24
+} else if (setting == 3) {
+  beta1 = c(rep(0, 5), rep(0, 90), rep(log(1.2), 5))
+  beta2 = c(rep(log(1.2), 5), rep(0, 90), rep(log(1.2), 5))
+  l10 <- 6.79
+} else if (setting == 5) {
+  beta1 = c(rep(log(1.2), 5), rep(0, 90), rep(log(1.2), 5))
+  beta2 = c(rep(log(1.05), 5), rep(0, 90), rep(log(1.05), 5))
+  l10 <- 6.52
+}
+# searching range: depends on penalty
+(lambda.seq = exp(seq(-6,-2, by = 0.5)))
+eta = 1.5
+# x dimension
+p = 100
+# cutpoints
+b0 = 0
+b1 = 0.2
+b2 = 0.4
+b3 = Inf
+cut_points = c(b0, b1, b2, b3)
+npiece = 3
+# end of observation
+CC = Inf
+tau = 1
+# mean of x and covariance matrix
+mean.x = rep(0, p)
+sigma.x = matrix(nrow = p, ncol = p)
+for (i in 1:p) {
+  for (j in 1:p) {
+    sigma.x[i, j] <- 0.5 ^ (abs(i - j))
+  }
+}
+
+l20 <- l10 * eta
+# baselines and theta.t
+l1_base <- rep(l10, 3)
+l2_base <- rep(l20, 3)
+
+(theta.t <- c(l1_base, l2_base, beta1, beta2))
+
+# a function to run simulations for a randomly generated data set
+sim_bic <- function(sim){
+  l <- sim*100
+  set.seed(l)
+  # generate complete data
+  data.comp <- data_comp_gen(seed = l,
+                             theta = theta.t,
+                             xtype = xtype, n = n)
+  # generate incomplete data under intermittent observation
+  data.msm <- data_ic_msm(seed = l, data.comp, rho = rho)
+  # obtain an initial value for the EM algorithm
+  q = rbind(c(-0.1, 0.1, 0),
+            c(0,-0.1, 0.1),
+            c(0, 0, 0))
+  msm.fit = msm(state ~ time, gen.inits = T, subject = id, data = data.msm, qmatrix = q, censor = 999)
+  # get initial estimators for the baseline intensities
+  lamb.start <- msm.fit$estimates.t
+  # set the initial estimators for beta to 0
+  start.value <- as.vector(c(rep(lamb.start, each = 3), rep(0, 200)))
+  # generate incomplete data under intermittent observation
+  datac <- data_ic_gen(seed = l, data.comp, rho = rho)
+  if(penalty == "lasso" | penalty == "glasso") {
+    theta.mle <- NULL
+    cat(" ---- MLE not needed ----")
+  } else if (penalty == "alasso" | penalty == "aglasso") {
+    # if applying penalty functions with adaptive weights, compute MLE to construct the initial weights
+    theta.mle.list = em.pen(theta.start = start.value,
+                             datac = datac,
+                             penalty = "no")
+    theta.mle <- theta.mle.list$theta
+    cat(" ---- MLE done ----")
+  }
+  # EM begins
+  result.list <- NULL
+  for (j in 1:length(lambda.seq)) {
+    cat("the", j, "th lambda, \n")
+    em.res = em.pen2(
+      theta.start = start.value,
+      theta.mle = theta.mle,
+      lambda = lambda.seq[j],
+      datac = datac,
+      penalty = penalty
+    )
+    # compute sabic values
+    sabic <-
+      sum(em.res$theta != 0) * log(nrow(train.dat)) - 2 * loglik.datac(train.dat, theta = em.res$theta) -
+      sum(em.res$theta != 0) * log(24 * nrow(train.dat) / (nrow(train.dat) + 2))
+    est <- em.res$theta
+    result.list[[j]] = list(sabic = sabic, est = est)
+  }
+  # plot sabic vs tuning parameter values
+  sabic.vec <- sapply(result.list, function(x) x$sabic)
+  plot(log(lambda.seq),
+       sabic.vec,
+       type = "b",
+       ylab = "SABIC",
+       main = paste("seed = ", l))
+  # record the index of the lambda which minimizes SABIC
+  index = which.min(sabic.vec)
+  select.list <- result.list[[index]]$est
+  return(select.list)
+}
+
+# start a serial job
+sim_bic(1)
