@@ -546,4 +546,20 @@ s23.fn.s <- function(i, theta, datac){
   return(val)
 }
 
+# calculate observed data likelihood
+loglik.obs.indiv <- function(obs, datac, theta){
+  temp <- datac[obs, ]
+  x.obs = as.numeric(temp[, paste0("x", 1:100)])
+  if (with(temp, L1 == L2 & R1 == R2)) {
+    loglik = with(temp, log(p_fn(0, L1, theta, x = x.obs)[1,1]*p_fn(L1, R1, theta, x = x.obs)[1,3]))
+  }else{
+    loglik = with(temp, log(p_fn(0, L1, theta, x = x.obs)[1,1]*p_fn(L1, R1, theta, x = x.obs)[1,2]*p_fn(R1, L2, theta, x = x.obs)[2,2]*p_fn(L2, R2, theta, x = x.obs)[2,3]))
+  }
+  return(loglik)
+}
+
+loglik.datac <- function(datac, theta){
+  temp = vapply(1:nrow(datac), loglik.obs.indiv, datac = datac, theta = theta, FUN.VALUE = numeric(1))
+  return(sum(temp))
+}
 
