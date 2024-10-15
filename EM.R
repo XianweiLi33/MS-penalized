@@ -1,23 +1,4 @@
-# E_step
-estep <- function(datac, theta){
-  # compute the expectations of indicators
-  d11 <- vapply( 1:nrow(datac), d11.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  d12 <- vapply( 1:nrow(datac), d12.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  d13 <- vapply( 1:nrow(datac), d13.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  d21 <- vapply( 1:nrow(datac), d21.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  d22 <- vapply( 1:nrow(datac), d22.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  d23 <- vapply( 1:nrow(datac), d23.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  # compute the expectations of sojourn time
-  s11 <- vapply( 1:nrow(datac), s11.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  s12 <- vapply( 1:nrow(datac), s12.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  s13 <- vapply( 1:nrow(datac), s13.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  s21 <- vapply( 1:nrow(datac), s21.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  s22 <- vapply( 1:nrow(datac), s22.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  s23 <- vapply( 1:nrow(datac), s23.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
-  df.new = data.frame(id = datac$id, d11, d12, d13, d21, d22, d23, s11, s12, s13, s21, s22, s23)
-  return(df.new)
-}
-
+# E-step
 estep <- function(datac, theta){
   d11 <- vapply( 1:nrow(datac), d11.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
   d12 <- vapply( 1:nrow(datac), d12.fn.s, theta = theta, FUN.VALUE = numeric(1), datac = datac)
@@ -35,6 +16,7 @@ estep <- function(datac, theta){
   return(df.new)
 }
 
+# M-step
 mstep.pen <- function(datac, df.new, lambda, penalty, theta, theta.mle){
   # create a pseudo data set
   df.ps <- lapply(1:nrow(df.new), function(i) {
@@ -154,7 +136,8 @@ mstep.pen <- function(datac, df.new, lambda, penalty, theta, theta.mle){
   return(theta.new)
 }
 
-em.pen2 <- function(theta.start, theta.mle, lambda, datac, penalty){
+# EM algorithm
+em.pen <- function(theta.start, theta.mle, lambda, datac, penalty){
   cur.theta <- theta.start
   iter = 0
   tol = 9999
