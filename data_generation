@@ -1,17 +1,23 @@
 # Generate data under continuous observation
 data_comp_gen <- function(seed, theta, xtype, n) {
   set.seed(seed)
+  # retrieve beta and lambda
   beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
   beta2 = theta[(2 * npiece  + p + 1):(2 * npiece  + p + p)]
-  l1 = theta[1]# the first baseline
-  l2 = theta[1+npiece ]# the second baseline # please carefully check the baseline when there are more cutpoints
+  l1 = theta[1]
+  l2 = theta[1 + npiece]
   # generate x
-  x <- switch(as.character(xtype), "cts" = rmvnorm(n, mean = mean.x, sigma = sigma.x), "binary" = cBern(n, rep(0.2,p), 0.2, type="DCP"))
-  # generate t1
+  x <-
+    switch(
+      as.character(xtype),
+      "cts" = rmvnorm(n, mean = mean.x, sigma = sigma.x),
+      "binary" = cBern(n, rep(0.2, p), 0.2, type = "DCP")
+    )
+  # generate T1
   t1 <- rexp(n = n, rate = l1 * exp(x %*% beta1))
-  # generate W
+  # generate W, the gap time
   w <- rexp(n = n, rate = l2 * exp(x %*% beta2))
-  # T2 = T1+w
+  # T2 = T1 + w
   t2 <- t1 + w
   # data frame
   temp = data.frame(id = 1:n,
@@ -25,38 +31,39 @@ data_comp_gen <- function(seed, theta, xtype, n) {
 }
 
 # Generate observed data under intermittent observation given the complete data
-data_ic_gen <- function(seed, datat, rho){
+data_ic_gen <- function(seed, datat, rho) {
   set.seed(seed)
   datac.list <- NULL
-  for (i in 1:nrow(datat)){
-    temp = datat[i,]
+  for (i in 1:nrow(datat)) {
+    temp = datat[i, ]
     times  = c(temp$t1, temp$t2)
     states = 1:2
     # generate A (actual # of visits)
-    A <- rpois(1, rho*tau)
-    if(A == 0) next
+    A <- rpois(1, rho * tau)
+    if (A == 0)
+      next
     Ai <- runif(A) * tau
-    Ai <- c(0,Ai[order(Ai)])
+    Ai <- c(0, Ai[order(Ai)])
     # record observed state
-    fun <- stepfun(x = times, y = c(0,states))
+    fun <- stepfun(x = times, y = c(0, states))
     z <- fun(Ai)
-    if(sum(z==1) != 0 & sum(z==2)!=0){
+    if (sum(z == 1) != 0 & sum(z == 2) != 0) {
       L1 <- Ai[max(which(z == 0))]
       R1 <- Ai[min(which(z == 1))]
       L2 <- Ai[max(which(z == 1))]
       R2 <- Ai[min(which(z == 2))]
       # 0-2
-    }else if(sum(z==1) == 0 & sum(z==2)!=0){
+    } else if (sum(z == 1) == 0 & sum(z == 2) != 0) {
       L1 <- L2 <- Ai[max(which(z == 0))]
       R1 <- R2 <- Ai[min(which(z == 2))]
       # 0-1
-    }else if (sum(z==1) !=0 & sum(z==2) == 0){
+    } else if (sum(z == 1) != 0 & sum(z == 2) == 0) {
       L1 <- Ai[max(which(z == 0))]
       R1 <- Ai[min(which(z == 1))]
       L2 <- Ai[max(which(z == 1))]
       R2 <- CC
       # 0-0
-    }else{
+    } else{
       L1 <- max(Ai)
       R1 <- CC
       L2 <- max(Ai)
@@ -73,61 +80,68 @@ data_ic_gen <- function(seed, datat, rho){
 }
 
 # generate observed data under dependent observation scheme
+# note: this function is only used for additional simulation studies in the supplementary material
 data_dependenet_visit_gen <- function(seed, theta, xtype, n) {
   set.seed(seed)
   datac.list <- data.msm.list <- NULL
   beta1 = theta[(2 * npiece  + 1):(2 * npiece  + p)]
   beta2 = theta[(2 * npiece  + p + 1):(2 * npiece  + p + p)]
-  l1 = theta[1]# the first baseline
-  l2 = theta[1 + npiece ]
+  l1 = theta[1]
+  l2 = theta[1 + npiece]
   # generate x
-  x <- switch(as.character(xtype), "cts" = rmvnorm(n, mean = mean.x, sigma = sigma.x), "binary" = cBern(n, rep(0.2,p), 0.2, type="DCP"))
-  for(i in 1: n){
+  x <-
+    switch(
+      as.character(xtype),
+      "cts" = rmvnorm(n, mean = mean.x, sigma = sigma.x),
+      "binary" = cBern(n, rep(0.2, p), 0.2, type = "DCP")
+    )
+  for (i in 1:n) {
     # initialization
     t <- 0 # time
     state <- 0
     # record the sequence
-    vtime <- 0; state_seq <- 0
+    vtime <- 0
+    state_seq <- 0
     # set parameters: lambda1 and lambda2 (with x)
-    lambda1 <- l1 * exp(x[i, ] %*% beta1)
-    lambda2 <- l2 * exp(x[i, ] %*% beta2)
+    lambda1 <- l1 * exp(x[i,] %*% beta1)
+    lambda2 <- l2 * exp(x[i,] %*% beta2)
     # generate the observed path for this subject
-    for(visit in 1:30){
-      if(state == 0){
+    for (visit in 1:30) {
+      if (state == 0) {
         # generate W0 and G0
         W0 <- rexp(n = 1, rate = lambda1)
         G0 <- rexp(n = 1, rate = rho0)
-        if(W0 < G0){
+        if (W0 < G0) {
           # move right
           t <- t + W0
           state <- state + 1
-        }else{
+        } else{
           # move down
           t <- t + G0
           state <- state # remains in this state
           visit <- visit + 1
-          # when move down, a visit happens -> record it 
+          # when move down, a visit happens -> record it
           vtime <- c(vtime, t)
           state_seq <- c(state_seq, state)
         }
-      }else if(state == 1){
+      } else if (state == 1) {
         # generate W0 and G0
         W1 <- rexp(n = 1, rate = lambda2)
         G1 <- rexp(n = 1, rate = rho1)
-        if(W1 < G1){
+        if (W1 < G1) {
           # move right
           t <- t + W1
           state <- state + 1
-        }else{
+        } else{
           # move down
           t <- t + G1
           state <- state # remains in this state
           visit <- visit + 1
-          # when move down, a visit happens -> record it 
+          # when move down, a visit happens -> record it
           vtime <- c(vtime, t)
           state_seq <- c(state_seq, state)
         }
-      }else if(state == 2){
+      } else if (state == 2) {
         # can only move downward
         G2 <- rexp(n = 1, rate = rho2)
         visit <- visit + 1
@@ -138,27 +152,30 @@ data_dependenet_visit_gen <- function(seed, theta, xtype, n) {
       }
       # print(c(t, state))
       # if time has exceeded 1 (tau), stop
-      if(max(vtime) > 1) break
+      if (max(vtime) > 1)
+        break
     }
-    Ai <- vtime[-length(vtime)] 
+    Ai <- vtime[-length(vtime)]
     z <- state_seq[-length(state_seq)]
-    # generate dat.msm 
-    data.msm.list[[i]] <- data.frame(id = i, time = Ai, state = z)
+    # generate dat.msm
+    data.msm.list[[i]] <- data.frame(id = i,
+                                     time = Ai,
+                                     state = z)
     # obtain censoring intervals
-    if(sum(z == 1) != 0 & sum(z == 2)!=0){
+    if (sum(z == 1) != 0 & sum(z == 2) != 0) {
       L1 <- Ai[max(which(z == 0))]
       R1 <- Ai[min(which(z == 1))]
       L2 <- Ai[max(which(z == 1))]
       R2 <- Ai[min(which(z == 2))]
-    }else if(sum(z==1) == 0 & sum(z==2)!=0){
+    } else if (sum(z == 1) == 0 & sum(z == 2) != 0) {
       L1 <- L2 <- Ai[max(which(z == 0))]
       R1 <- R2 <- Ai[min(which(z == 2))]
-    }else if (sum(z==1) !=0 & sum(z==2) == 0){
+    } else if (sum(z == 1) != 0 & sum(z == 2) == 0) {
       L1 <- Ai[max(which(z == 0))]
       R1 <- Ai[min(which(z == 1))]
       L2 <- Ai[max(which(z == 1))]
       R2 <- CC
-    }else{
+    } else{
       L1 <- max(Ai)
       R1 <- CC
       L2 <- max(Ai)
