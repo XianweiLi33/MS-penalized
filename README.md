@@ -1,7 +1,7 @@
 # Introduction
 This repository contains R code to implement the methodology described in the paper "Variable Selection for Progressive Multistate Processes under Intermittent Observation".
 ## aglasso
-The aglasso folder contains a modified version of the **grplasso** (https://cran.r-project.org/web/packages/grplasso/index.html) package incorporating adaptive weights for coefficients. 
+The aglasso folder contains a modified version of the **grplasso** (https://cran.r-project.org/web/packages/grplasso/index.html) package incorporating adaptive weights for coefficients. Specifically, we modified the grplasso.R file in the **grplasso** package.
 
 ## helper_functions
 This file contains several helper functions, including:
