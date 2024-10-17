@@ -1,4 +1,4 @@
-# This file illustrate how to modify the existing grplasso package
+# This file illustrate how to modify the grplasso.R file in the existing grplasso package
 
 grplasso <- function(x, ...)
   UseMethod("grplasso")
