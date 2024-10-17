@@ -30,52 +30,30 @@ data_comp_gen <- function(seed, theta, xtype, n) {
   return(data.comp)
 }
 
-# Generate observed data under intermittent observation given the complete data
-data_ic_gen <- function(seed, datat, rho) {
+# Generate observed data in long format under intermittent observation given the complete data
+data_ic_msm <- function(seed, datat, rho){
   set.seed(seed)
   datac.list <- NULL
-  for (i in 1:nrow(datat)) {
-    temp = datat[i, ]
+  for (i in 1:nrow(datat)){
+    temp = datat[i,]
     times  = c(temp$t1, temp$t2)
     states = 1:2
     # generate A (actual # of visits)
-    A <- rpois(1, rho * tau)
-    if (A == 0)
-      next
+    A <- rpois(1, rho*tau)
+    if(A == 0) next
     Ai <- runif(A) * tau
-    Ai <- c(0, Ai[order(Ai)])
+    Ai <- c(0,Ai[order(Ai)])
     # record observed state
-    fun <- stepfun(x = times, y = c(0, states))
+    fun <- stepfun(x = times, y = c(0,states))
     z <- fun(Ai)
-    if (sum(z == 1) != 0 & sum(z == 2) != 0) {
-      L1 <- Ai[max(which(z == 0))]
-      R1 <- Ai[min(which(z == 1))]
-      L2 <- Ai[max(which(z == 1))]
-      R2 <- Ai[min(which(z == 2))]
-      # 0-2
-    } else if (sum(z == 1) == 0 & sum(z == 2) != 0) {
-      L1 <- L2 <- Ai[max(which(z == 0))]
-      R1 <- R2 <- Ai[min(which(z == 2))]
-      # 0-1
-    } else if (sum(z == 1) != 0 & sum(z == 2) == 0) {
-      L1 <- Ai[max(which(z == 0))]
-      R1 <- Ai[min(which(z == 1))]
-      L2 <- Ai[max(which(z == 1))]
-      R2 <- CC
-      # 0-0
-    } else{
-      L1 <- max(Ai)
-      R1 <- CC
-      L2 <- max(Ai)
-      R2 <- CC
+    # add 1 for msm computing
+    z <- z + 1
+    if (z[length(z)] == 2){
+      z[length(z)] <- 999
     }
-    datac.list[[i]] <- data.frame(id = i, L1, R1, L2, R2)
+    datac.list[[i]] <- data.frame(id = i, time = Ai, state = z)
   }
   datac <- do.call(rbind, datac.list)
-  # id with x
-  x.df <- datat[, c("id", paste0("x", 1:100))]
-  # merge -> id + censored interval + x
-  datac <- merge(datac, x.df, by = "id")
   return(datac)
 }
 
