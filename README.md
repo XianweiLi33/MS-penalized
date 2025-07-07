@@ -1,9 +1,9 @@
 # Introduction
-This repository contains R code to implement the methodology described in the paper *Variable Selection for Progressive Multistate Processes Under Intermittent Observation.* by Xianwei Li, Richard Cook, and Liqun Diao.
+This repository contains R code to implement the methodology described in the paper:
+
 **Li, X., Cook, R. J., & Diao, L. (2025).**  
-*Variable Selection for Progressive Multistate Processes Under Intermittent Observation.*  
-**Statistics in Medicine**, 44(6), e70023.  
-[Read the full paper here](https://onlinelibrary.wiley.com/doi/full/10.1002/sim.70023)
+[*Variable Selection for Progressive Multistate Processes Under Intermittent Observation*](https://onlinelibrary.wiley.com/doi/full/10.1002/sim.70023)  
+**Statistics in Medicine**, 44(6), e70023.
 
 ## aglasso
 The aglasso folder contains a modified version of the **grplasso** (https://cran.r-project.org/web/packages/grplasso/index.html) package incorporating adaptive weights for coefficients. Specifically, we modified the grplasso.R file in the **grplasso** package.
